@@ -146,3 +146,84 @@ print(f'Total cost: {total_tokens}')
 | 单实例超时 | `max_iter=100` 已是合理上限 |
 | 磁盘空间不足 | 定期清理 Docker 镜像 `docker system prune` |
 | 评测中断 | OpenHands 支持断点续跑，已完成实例会跳过 |
+
+---
+
+## 评测结果
+
+### Stage 1 验证结果 (2026-01-21)
+
+#### 配置修正
+
+原始设计中的模型名需要添加 `openai/` 前缀以兼容 LiteLLM：
+
+```toml
+# 正确配置
+[llm.ppio_claude_sonnet]
+model = "openai/pa/claude-sonnet-4-5-20250929"  # 添加 openai/ 前缀
+base_url = "https://api.ppio.com/openai/v1"
+api_key = "YOUR_API_KEY"
+temperature = 0.0
+```
+
+#### 环境变量
+
+运行命令需要设置代理和 NO_PROXY：
+
+```bash
+HTTPS_PROXY=http://172.17.0.1:1081 \
+HTTP_PROXY=http://172.17.0.1:1081 \
+NO_PROXY=localhost,127.0.0.1 \
+./evaluation/benchmarks/swe_bench/scripts/run_infer.sh llm.ppio_claude_sonnet HEAD CodeActAgent 10 100 1
+```
+
+#### 结果统计
+
+| 指标 | 数值 |
+|------|------|
+| 测试实例数 | 10 |
+| 补丁生成率 | 100% (10/10) |
+| **测试通过率** | **30% (3/10)** |
+| 运行时间 | ~3 小时 |
+
+#### 通过的实例
+
+| Instance ID | 修改文件 |
+|-------------|----------|
+| django__django-16379 | django/core/cache/backends/filebased.py |
+| pytest-dev__pytest-6116 | src/_pytest/main.py |
+| scikit-learn__scikit-learn-13779 | sklearn/ensemble/voting.py |
+
+#### 未通过的实例
+
+| Instance ID | 修改文件 |
+|-------------|----------|
+| astropy__astropy-7746 | astropy/wcs/wcs.py |
+| django__django-11019 | django/forms/widgets.py |
+| psf__requests-2317 | requests/models.py |
+| scikit-learn__scikit-learn-25500 | sklearn/calibration.py |
+| sympy__sympy-12171 | sympy/printing/mathematica.py |
+| sympy__sympy-13146 | sympy/core/numbers.py |
+| sympy__sympy-18189 | sympy/solvers/diophantine |
+
+#### 输出文件
+
+```
+evaluation/evaluation_outputs/outputs/princeton-nlp__SWE-bench_Lite-test/CodeActAgent/claude-sonnet-4-5-20250929_maxiter_100_N_v1.2.1-no-hint-run_1/
+├── output.jsonl              # 推理结果
+├── output.swebench.jsonl     # SWE-bench 格式
+├── report.json               # 评估报告
+├── eval_outputs/             # 测试日志
+└── llm_completions/          # LLM 调用日志
+```
+
+### 已解决的技术问题
+
+1. **Docker 构建失败** - 配置 `~/.docker/config.json` 代理
+2. **LiteLLM 提供商识别** - 使用 `openai/` 前缀
+3. **Runtime 503 错误** - 添加 `NO_PROXY=localhost,127.0.0.1`
+
+### 下一步
+
+- [ ] Stage 2: 300 实例中等规模测试
+- [ ] Stage 3: 500 实例 SWE-bench_Verified 完整评测
